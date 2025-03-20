@@ -107,6 +107,7 @@ struct float3
 	float halfArea() { return x < -1e30f ? 0 : (x * y + y * z + z * x); } // for SAH calculations
 	union { struct { float x, y, z; }; float cell[3]; };
 	float& operator [] ( const int n ) { return cell[n]; }
+	const float& operator [] ( const int n ) const { return cell[n]; }
 };
 struct ALIGN( 4 ) uchar4
 {
