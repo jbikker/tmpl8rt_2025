@@ -907,7 +907,7 @@ public:
 		else
 		{
 			float angle = acosf( cosTheta );
-			float s1 = sinf( 1 - t ), s2 = sinf( t * angle ), s3 = sinf( angle );
+			float s1 = sinf(1 - t) * angle, s2 = sinf(t * angle), s3 = sinf(angle);
 			r.w = (s1 * a.w + s2 * r.w) / s3;
 			r.x = (s1 * a.x + s2 * r.x) / s3;
 			r.y = (s1 * a.y + s2 * r.y) / s3;
