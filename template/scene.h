@@ -15,7 +15,7 @@
 // - Has some high-frequency details - for filtering
 // -----------------------------------------------------------
 
-#define FOURLIGHTS
+#define NOWALLS
 
 #define PLANE_X(o,i) {t=-(ray.O.x+o)*ray.rD.x;if(t<ray.t&&t>0)ray.t=t,ray.objIdx=i;}
 #define PLANE_Y(o,i) {t=-(ray.O.y+o)*ray.rD.y;if(t<ray.t&&t>0)ray.t=t,ray.objIdx=i;}
@@ -90,7 +90,7 @@ public:
 	}
 	float3 GetAlbedo( const float3 I ) const
 	{
-		return float3( 0.93f );
+		return float3( 0.93f, 0.5f, 0.5f );
 	}
 	union
 	{
@@ -130,7 +130,7 @@ public:
 			// add deliberate aliasing to two tile
 			if (ix == 98 && iz == 98) ix = (int)(I.x * 32.01f), iz = (int)(I.z * 32.01f);
 			if (ix == 94 && iz == 98) ix = (int)(I.x * 64.01f), iz = (int)(I.z * 64.01f);
-			return float3( ((ix + iz) & 1) ? 1 : 0.3f );
+			return float3( ((ix + iz) & 1) ? 1 : 0.1f );
 		}
 		else if (N.z == -1)
 		{
@@ -293,183 +293,6 @@ public:
 };
 
 // -----------------------------------------------------------
-// Torus primitive - Inigo Quilez, ShaderToy 4sBGDy
-// -----------------------------------------------------------
-class Torus
-{
-public:
-	Torus() = default;
-	Torus::Torus( int idx, float a, float b ) : objIdx( idx )
-	{
-		rc2 = a * a, rt2 = b * b;
-		r2 = sqrf( a + b );
-	}
-	void Intersect( Ray& ray ) const
-	{
-		// via: https://www.shadertoy.com/view/4sBGDy
-		float3 O = ray.O - float3( 0, 0, 1.5f ), D = ray.D;
-		// extension rays need double precision for the quadratic solver!
-		double po = 1, m = dot( O, O ), k3 = dot( O, D ), k32 = k3 * k3;
-		// bounding sphere test
-		double v = k32 - m + r2;
-		if (v < 0) return;
-		// setup torus intersection
-		double k = (m - rt2 - rc2) * 0.5, k2 = k32 + rc2 * D.z * D.z + k;
-		double k1 = k * k3 + rc2 * O.z * D.z, k0 = k * k + rc2 * O.z * O.z - rc2 * rt2;
-		// solve quadratic equation
-		if (fabs( k3 * (k32 - k2) + k1 ) < 0.0001)
-		{
-			swap( k1, k3 );
-			po = -1, k0 = 1 / k0, k1 = k1 * k0, k2 = k2 * k0, k3 = k3 * k0, k32 = k3 * k3;
-		}
-		double c2 = 2 * k2 - 3 * k32, c1 = k3 * (k32 - k2) + k1;
-		double c0 = k3 * (k3 * (-3 * k32 + 4 * k2) - 8 * k1) + 4 * k0;
-		c2 *= 0.33333333333, c1 *= 2, c0 *= 0.33333333333;
-		double Q = c2 * c2 + c0, R = 3 * c0 * c2 - c2 * c2 * c2 - c1 * c1;
-		double h = R * R - Q * Q * Q, z;
-		if (h < 0)
-		{
-			const double sQ = sqrt( Q );
-			z = 2 * sQ * cos( acos( R / (sQ * Q) ) * 0.33333333333 );
-		}
-		else
-		{
-		#if 1
-			const double sQ = cbrtFast( sqrt( h ) + fabs( R ) ); // by Jeppe Vroegindeweij
-		#else
-			const double sQ = cbrt( sqrt( h ) + fabs( R ) ); // pow( sqrt( h ) + fabs( R ), 0.3333333 );
-		#endif
-			z = copysign( fabs( sQ + Q / sQ ), R );
-		}
-		z = c2 - z;
-		double d1 = z - 3 * c2, d2 = z * z - 3 * c0;
-		if (fabs( d1 ) < 1.0e-8)
-		{
-			if (d2 < 0) return;
-			d2 = sqrt( d2 );
-		}
-		else
-		{
-			if (d1 < 0) return;
-			d1 = sqrt( d1 * 0.5 ), d2 = c1 / d1;
-		}
-		double t = 1e20;
-		h = d1 * d1 - z + d2;
-		if (h > 0)
-		{
-			h = sqrt( h );
-			double t1 = -d1 - h - k3, t2 = -d1 + h - k3;
-			t1 = (po < 0) ? 2 / t1 : t1, t2 = (po < 0) ? 2 / t2 : t2;
-			if (t1 > 0) t = t1;
-			if (t2 > 0) t = min( t, t2 );
-		}
-		h = d1 * d1 - z - d2;
-		if (h > 0)
-		{
-			h = sqrt( h );
-			double t1 = d1 - h - k3, t2 = d1 + h - k3;
-			t1 = (po < 0) ? 2 / t1 : t1, t2 = (po < 0) ? 2 / t2 : t2;
-			if (t1 > 0) t = min( t, t1 );
-			if (t2 > 0) t = min( t, t2 );
-		}
-		float ft = (float)t;
-		if (ft > 0 && ft < ray.t) ray.t = ft, ray.objIdx = objIdx;
-	}
-	bool IsOccluded( const Ray& ray ) const
-	{
-		// via: https://www.shadertoy.com/view/4sBGDy
-		float3 O = ray.O - float3( 0, 0, 1.5f ), D = ray.D;
-		float po = 1, m = dot( O, O ), k3 = dot( O, D ), k32 = k3 * k3;
-		// bounding sphere test
-		float v = k32 - m + r2;
-		if (v < 0.0) return false;
-		// setup torus intersection
-		float k = (m - rt2 - rc2) * 0.5f, k2 = k32 + rc2 * D.z * D.z + k;
-		float k1 = k * k3 + rc2 * O.z * D.z, k0 = k * k + rc2 * O.z * O.z - rc2 * rt2;
-		// solve quadratic equation
-		if (fabs( k3 * (k32 - k2) + k1 ) < 0.01f)
-		{
-			swap( k1, k3 );
-			po = -1, k0 = 1 / k0, k1 = k1 * k0, k2 = k2 * k0, k3 = k3 * k0, k32 = k3 * k3;
-		}
-		float c2 = 2 * k2 - 3 * k32, c1 = k3 * (k32 - k2) + k1;
-		float c0 = k3 * (k3 * (-3 * k32 + 4 * k2) - 8 * k1) + 4 * k0;
-		c2 *= 0.33333333333f, c1 *= 2, c0 *= 0.33333333333f;
-		float Q = c2 * c2 + c0, R = 3 * c0 * c2 - c2 * c2 * c2 - c1 * c1;
-		float h = R * R - Q * Q * Q, z = 0;
-		if (h < 0)
-		{
-			const float sQ = sqrtf( Q );
-			z = 2 * sQ * cosf( acosf( R / (sQ * Q) ) * 0.3333333f );
-		}
-		else
-		{
-		#if 1
-			const float sQ = (float)cbrtFast( sqrtf( h ) + fabsf( R ) );
-		#else
-			const float sQ = cbrtf( sqrtf( h ) + fabs( R ) ); // powf( sqrtf( h ) + fabs( R ), 0.3333333f );
-		#endif
-			z = copysign( fabs( sQ + Q / sQ ), R );
-		}
-		z = c2 - z;
-		float d1 = z - 3 * c2, d2 = z * z - 3 * c0;
-		if (fabs( d1 ) < 1.0e-4f)
-		{
-			if (d2 < 0) return false;
-			d2 = sqrtf( d2 );
-		}
-		else
-		{
-			if (d1 < 0.0) return false;
-			d1 = sqrtf( d1 * 0.5f ), d2 = c1 / d1;
-		}
-		float t = 1e20f;
-		h = d1 * d1 - z + d2;
-		if (h > 0)
-		{
-			float t1 = -d1 - sqrtf( h ) - k3;
-			t1 = (po < 0) ? 2 / t1 : t1;
-			if (t1 > 0 && t1 < ray.t) return true;
-		}
-		h = d1 * d1 - z - d2;
-		if (h > 0)
-		{
-			float t1 = d1 - sqrtf( h ) - k3;
-			t1 = (po < 0) ? 2 / t1 : t1;
-			if (t1 > 0 && t1 < ray.t) return true;
-		}
-		return false;
-	}
-	float3 GetNormal( const float3 I ) const
-	{
-		const float3 L = I - float3( 0, 0, 1.5f );
-		return normalize( L * (dot( L, L ) - rt2 - rc2 * float3( 1, 1, -1 )) );
-	}
-	float3 Torus::GetAlbedo( const float3 I ) const
-	{
-		return float3( 1 ); // material.albedo;
-	}
-	float rt2, rc2, r2;
-	int objIdx;
-	// these are helper functions for the torus code
-	// these function will find the cubic root up till a certain accuracy using the newtonian method
-	float cbrtfFast( const float n ) const {
-		float x1 = n / 10.0f, x2 = 1.0f;
-		int turn = 0;
-		while (fabs( x1 - x2 ) > 0.00000001 && turn++ < 100)
-			x1 = x2, x2 = (2.0f / 3.0f * x1) + (n / (3.0f * x1 * x1));
-		return x2;
-	}
-	double cbrtFast( const double n ) const {
-		double x1 = n / 10.0f, x2 = 1.0f;
-		int turn = 0;
-		while (fabs( x1 - x2 ) > 0.00000001 && turn++ < 100)
-			x1 = x2, x2 = (2.0f / 3.0f * x1) + (n / (3.0f * x1 * x1));
-		return x2;
-	}
-};
-
-// -----------------------------------------------------------
 // Scene class
 // We intersect this. The query is internally forwarded to the
 // list of primitives, so that the nearest hit can be returned.
@@ -496,7 +319,6 @@ public:
 		plane[3] = Plane( 7, float3( 0, -1, 0 ), 2 );			// 7: ceiling
 		plane[4] = Plane( 8, float3( 0, 0, 1 ), 3 );			// 8: front wall
 		plane[5] = Plane( 9, float3( 0, 0, -1 ), 3.99f );		// 9: back wall
-		torus = Torus( 10, 0.8f, 0.25f );						// 10: torus
 		SetTime( 0 );
 		// Note: once we have triangle support we should get rid of the class
 		// hierarchy: virtuals reduce performance somewhat.
@@ -614,7 +436,11 @@ public:
 		static const __m128 x4min = _mm_setr_ps( 3, 1, 3, 1e30f );
 		static const __m128 x4max = _mm_setr_ps( -2.99f, -2, -3.99f, 1e30f );
 		static const __m128 idmin = _mm_castsi128_ps( _mm_setr_epi32( 4, 6, 8, -1 ) );
+	#ifdef NOWALLS
+		static const __m128 idmax = _mm_castsi128_ps( _mm_setr_epi32( -1, -1, -1, -1 ) );
+	#else
 		static const __m128 idmax = _mm_castsi128_ps( _mm_setr_epi32( 5, 7, 9, -1 ) );
+	#endif
 		static const __m128 zero4 = _mm_setzero_ps();
 		const __m128 selmask = _mm_cmpge_ps( ray.D4, zero4 );
 		const __m128i idx4 = _mm_castps_si128( _mm_blendv_ps( idmin, idmax, selmask ) );
@@ -622,9 +448,14 @@ public:
 		const __m128 d4 = _mm_sub_ps( zero4, _mm_mul_ps( _mm_add_ps( ray.O4, x4 ), ray.rD4 ) );
 		const __m128 mask4 = _mm_cmple_ps( d4, zero4 );
 		const __m128 t4 = _mm_blendv_ps( d4, _mm_set1_ps( 1e34f ), mask4 );
+	#ifndef NOWALLS
 		/* first: unconditional */  ray.t = t4.m128_f32[0], ray.objIdx = idx4.m128i_i32[0];
 		if (t4.m128_f32[1] < ray.t) ray.t = t4.m128_f32[1], ray.objIdx = idx4.m128i_i32[1];
 		if (t4.m128_f32[2] < ray.t) ray.t = t4.m128_f32[2], ray.objIdx = idx4.m128i_i32[2];
+	#else
+		if (t4.m128_f32[1] < ray.t) ray.t = t4.m128_f32[1], ray.objIdx = idx4.m128i_i32[1];
+	#endif
+	#ifndef NOWALLS
 	#ifdef FOURLIGHTS
 		// efficient four-quad intersection by Jesse Vrooman
 		const __m128 t = _mm_div_ps( _mm_add_ps( _mm_set1_ps( ray.O.y ),
@@ -644,6 +475,7 @@ public:
 		if (maskedT.m128_f32[0] > 0) ray.t = maskedT.m128_f32[0], ray.objIdx = 0;
 	#else
 		quad.Intersect( ray );
+	#endif
 	#endif
 		{
 			// SIMD sphere intersection code by Jesse Vrooman
@@ -667,11 +499,10 @@ public:
 			{
 				const float t = sqrtf( d ) - b;
 				const bool hit = t < ray.t && t > 0;
-				if (hit) { ray.t = t, ray.objIdx = 2; }
+				// if (hit) { ray.t = t, ray.objIdx = 2; }
 			};
 		}
 		cube.Intersect( ray );
-		torus.Intersect( ray );
 	}
 	bool IsOccluded( const Ray& ray ) const
 	{
@@ -685,12 +516,13 @@ public:
 			const bool hit = t < ray.t && t > 0;
 			if (hit) return true;
 		}
+	#ifndef NOWALLS
 	#ifdef FOURLIGHTS
 		for (int i = 0; i < 4; i++) if (quad[i].IsOccluded( ray )) return true;
 	#else
 		if (quad.IsOccluded( ray )) return true;
 	#endif
-		if (torus.IsOccluded( ray )) return true;
+	#endif
 		return false; // skip planes and rounded corners
 	}
 	float3 GetNormal( const int objIdx, const float3 I, const float3 wo ) const
@@ -707,7 +539,6 @@ public:
 		else if (objIdx == 1) N = sphere.GetNormal( I );
 		else if (objIdx == 2) N = sphere2.GetNormal( I );
 		else if (objIdx == 3) N = cube.GetNormal( I );
-		else if (objIdx == 10) N = torus.GetNormal( I );
 		else
 		{
 			// faster to handle the 6 planes without a call to GetNormal
@@ -728,7 +559,6 @@ public:
 		if (objIdx == 1) return sphere.GetAlbedo( I );
 		if (objIdx == 2) return sphere2.GetAlbedo( I );
 		if (objIdx == 3) return cube.GetAlbedo( I );
-		if (objIdx == 10) return torus.GetAlbedo( I );
 		return plane[objIdx - 4].GetAlbedo( I );
 		// once we have triangle support, we should pass objIdx and the bary-
 		// centric coordinates of the hit, instead of the intersection location.
@@ -758,6 +588,5 @@ public:
 	Sphere sphere2;
 	Cube cube;
 	Plane plane[6];
-	Torus torus;
 };
 }
