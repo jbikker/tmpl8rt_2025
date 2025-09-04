@@ -15,7 +15,7 @@
 // - Has some high-frequency details - for filtering
 // -----------------------------------------------------------
 
-#define NOWALLS
+// #define NOWALLS
 
 #define PLANE_X(o,i) {t=-(ray.O.x+o)*ray.rD.x;if(t<ray.t&&t>0)ray.t=t,ray.objIdx=i;}
 #define PLANE_Y(o,i) {t=-(ray.O.y+o)*ray.rD.y;if(t<ray.t&&t>0)ray.t=t,ray.objIdx=i;}
@@ -54,7 +54,8 @@ class Sphere
 public:
 	Sphere() = default;
 	Sphere( int idx, float3 p, float r ) :
-		pos( p ), r2( r* r ), invr( 1 / r ), objIdx( idx ) {}
+		pos( p ), r2( r* r ), invr( 1 / r ), objIdx( idx ) {
+	}
 	void Intersect( Ray& ray ) const
 	{
 		const __m128 oc = _mm_sub_ps( ray.O4, _mm_set_ps( 1, 1, this->pos.y, -1.8f ) );
@@ -577,8 +578,7 @@ public:
 	{
 		return objIdx == 3 ? float3( 0.5f, 0, 0.5f ) : float3( 0 );
 	}
-	__declspec(align(64)) // start a new cacheline here
-		float animTime = 0;
+	float animTime = 0;
 #ifdef FOURLIGHTS
 	Quad quad[4];
 #else
